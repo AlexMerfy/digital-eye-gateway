@@ -1,0 +1,79 @@
+name: Build and publish ARM64
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - run.sh
+      - config.yaml
+      - .github/workflows/build.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: digital-eye-gateway-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION="$(sed -n 's/^version: "\([^"]*\)"/\1/p' config.yaml)"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ARM64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          load: true
+          tags: digital-eye-gateway:check
+
+      - name: Verify architecture and startup
+        run: |
+          test "$(docker image inspect digital-eye-gateway:check --format '{{.Architecture}}')" = arm64
+          docker run -d --name gateway-check digital-eye-gateway:check
+          trap 'docker logs gateway-check; docker rm -f gateway-check' EXIT
+          for attempt in $(seq 1 15); do
+            test "$(docker inspect gateway-check --format '{{.State.Running}}')" = true
+            if docker logs gateway-check 2>&1 | grep -Fq "Digital Eye Gateway started (scaffold)."; then
+              sleep 2
+              test "$(docker inspect gateway-check --format '{{.State.Running}}')" = true
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish image
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          IMAGE=ghcr.io/alexmerfy/digital-eye-gateway
+          docker tag digital-eye-gateway:check "$IMAGE:$VERSION"
+          docker tag digital-eye-gateway:check "$IMAGE:latest"
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:latest"
+          docker buildx imagetools inspect "$IMAGE:$VERSION"

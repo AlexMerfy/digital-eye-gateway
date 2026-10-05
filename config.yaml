@@ -1,0 +1,13 @@
+name: Digital Eye Gateway
+version: "0.1.0"
+slug: digital_eye_gateway
+description: Digital Eye Gateway scaffold for Home Assistant
+url: https://github.com/AlexMerfy/digital-eye-gateway
+arch:
+  - aarch64
+startup: application
+boot: auto
+init: false
+image: ghcr.io/alexmerfy/digital-eye-gateway
+options: {}
+schema: {}

@@ -1,13 +1,34 @@
 name: Digital Eye Gateway
-version: "0.1.0"
+version: "0.2.0"
 slug: digital_eye_gateway
-description: Digital Eye Gateway scaffold for Home Assistant
+description: Digital Eye Gateway for FCM notifications and app backend
 url: https://github.com/AlexMerfy/digital-eye-gateway
+
 arch:
   - aarch64
+
 startup: application
 boot: auto
 init: false
+
 image: ghcr.io/alexmerfy/digital-eye-gateway
-options: {}
-schema: {}
+
+homeassistant_api: true
+
+map:
+  - type: app_config
+    read_only: false
+
+ports:
+  8099/tcp: 8099
+
+ports_description:
+  8099/tcp: Digital Eye Gateway API
+
+webui: http://[HOST]:[PORT:8099]/health
+
+options:
+  api_key: ""
+
+schema:
+  api_key: password

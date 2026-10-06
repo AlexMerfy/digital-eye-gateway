@@ -1,32 +1,60 @@
 # Digital Eye Gateway
 
-Минимальный каркас приложения Home Assistant для ARM64 (aarch64), включая Raspberry Pi 5 с 64-битной Home Assistant OS.
+Digital Eye Gateway is a Home Assistant app for the Digital Eye Android video-doorbell project.
 
-Сейчас приложение только пишет сообщение о запуске и остаётся запущенным через `sleep infinity`. Подключение цифрового глазка, Firebase, видео и событий ещё не реализовано.
+Version 0.2.0 adds the first functional backend:
 
-## Файлы
+- Firebase Admin SDK initialization from `/config/firebase-service-account.json`
+- `GET /health` status endpoint
+- authenticated `POST /api/test-push` endpoint for FCM test notifications
+- ARM64 image for Raspberry Pi 5 / Home Assistant OS
+- prebuilt image publication to GHCR
 
-- `Dockerfile` — образ на базе `ghcr.io/home-assistant/base:latest`.
-- `run.sh` — запуск через bashio.
-- `config.yaml` — описание приложения Home Assistant, версия 0.1.0.
-- `.github/workflows/build.yaml` — сборка, проверка запуска и публикация ARM64-образа в GHCR.
+## Home Assistant app configuration
 
-## Образ
+The app uses its private `app_config` directory, mounted inside the container as `/config`.
 
-`ghcr.io/alexmerfy/digital-eye-gateway:0.1.0`
+Place the Firebase service-account key there as:
 
-Workflow также публикует тег `latest`. Home Assistant использует тег, совпадающий с `version` в `config.yaml`.
+`/config/firebase-service-account.json`
 
-## Сборка
+Never commit that file to this repository.
 
-Workflow запускается при изменении файлов приложения в `main` и вручную через Actions → Build and publish ARM64 → Run workflow. Используется встроенный `GITHUB_TOKEN` с правом `packages: write`; отдельный токен не нужен.
+The API listens on TCP port `8099`.
 
-Перед публикацией workflow проверяет архитектуру образа и запуск контейнера. Это проверка каркаса, а не работы с настоящим глазком или Home Assistant.
+## API key
 
-## Установка
+Set a strong `api_key` in the Home Assistant app Configuration tab before using the test-push endpoint.
 
-После успешной публикации сделайте пакет GHCR публичным в настройках пакета, если он был создан приватным. Публичность репозитория сама по себе не гарантирует публичность контейнера.
+Requests to `POST /api/test-push` must include:
 
-Для локального приложения скопируйте `config.yaml`, `Dockerfile` и `run.sh` в `/addons/digital_eye_gateway/` на Home Assistant OS, обновите список локальных приложений и установите Digital Eye Gateway. Благодаря полю `image` Supervisor скачает опубликованный образ.
+`X-API-Key: <your api_key>`
 
-Не добавляйте в репозиторий Firebase credentials, service account JSON и другие секреты.
+Example JSON body:
+
+```json
+{
+  "token": "FCM_DEVICE_TOKEN",
+  "title": "Digital Eye",
+  "body": "Test notification",
+  "data": {
+    "event": "test"
+  }
+}
+```
+
+## Health check
+
+`GET /health`
+
+The response reports the app version, whether Firebase credentials loaded successfully, and whether an API key is configured. It never returns credentials or the API key.
+
+## Image
+
+`ghcr.io/alexmerfy/digital-eye-gateway:0.2.0`
+
+The workflow also publishes `latest`.
+
+## Security
+
+Do not commit Firebase credentials, Home Assistant tokens, camera credentials, API keys, or other secrets.

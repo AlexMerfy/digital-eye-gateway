@@ -6,6 +6,7 @@ on:
     paths:
       - Dockerfile
       - run.sh
+      - gateway.py
       - config.yaml
       - .github/workflows/build.yaml
   workflow_dispatch:
@@ -44,15 +45,18 @@ jobs:
           load: true
           tags: digital-eye-gateway:check
 
-      - name: Verify architecture and startup
+      - name: Verify architecture and health endpoint
         run: |
           test "$(docker image inspect digital-eye-gateway:check --format '{{.Architecture}}')" = arm64
-          docker run -d --name gateway-check digital-eye-gateway:check
+          mkdir -p /tmp/digital-eye-config
+          docker run -d \
+            --name gateway-check \
+            -p 18099:8099 \
+            -v /tmp/digital-eye-config:/config \
+            digital-eye-gateway:check
           trap 'docker logs gateway-check; docker rm -f gateway-check' EXIT
-          for attempt in $(seq 1 15); do
-            test "$(docker inspect gateway-check --format '{{.State.Running}}')" = true
-            if docker logs gateway-check 2>&1 | grep -Fq "Digital Eye Gateway started (scaffold)."; then
-              sleep 2
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:18099/health | grep -Fq '"status":"ok"'; then
               test "$(docker inspect gateway-check --format '{{.State.Running}}')" = true
               exit 0
             fi
